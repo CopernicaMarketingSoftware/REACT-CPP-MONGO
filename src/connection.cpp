@@ -21,6 +21,37 @@ namespace Mongo {
  *  to connect to. If no port number is given, the default port of 27017 is
  *  assumed instead.
  *
+ *  @param  loop        the event loop to bind to
+ *  @param  host        single server to connect to
+ */
+Connection::Connection(React::Loop *loop, const std::string& host) :
+    _loop(loop),
+    _worker(loop),
+    _master()
+{
+    // connect to mongo
+    _worker.execute([this, host]() {
+        // try to establish a connection to mongo
+        try
+        {
+            // connect throws an exception on failure
+            _mongo.connect(host);
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // no callback to report the error
+        }
+    });
+}
+
+/**
+ *  Establish a connection to a mongo daemon or mongos instance.
+ *
+ *  The hostname may be postfixed with a colon, followed by the port number
+ *  to connect to. If no port number is given, the default port of 27017 is
+ *  assumed instead.
+ *
+ *  @param  loop        the event loop to bind to
  *  @param  host        single server to connect to
  *  @param  callback    callback that will be executed when the connection is established or an error occured
  */

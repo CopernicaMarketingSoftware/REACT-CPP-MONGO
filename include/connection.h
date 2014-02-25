@@ -63,6 +63,18 @@ public:
      *
      *  @param  loop        the event loop to bind to
      *  @param  host        single server to connect to
+     */
+    Connection(React::Loop *loop, const std::string& host);
+
+    /**
+     *  Establish a connection to a mongo daemon or mongos instance.
+     *
+     *  The hostname may be postfixed with a colon, followed by the port number
+     *  to connect to. If no port number is given, the default port of 27017 is
+     *  assumed instead.
+     *
+     *  @param  loop        the event loop to bind to
+     *  @param  host        single server to connect to
      *  @param  callback    callback that will be executed when the connection is established or an error occured
      */
     Connection(React::Loop *loop, const std::string& host, const std::function<void(bool connected, const std::string& error)>& callback);
