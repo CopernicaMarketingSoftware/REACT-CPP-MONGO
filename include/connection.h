@@ -81,7 +81,7 @@ public:
      *  @param  query       the query to execute
      *  @param  callback    the callback that will be called with the results
      */
-    void query(const std::string& collection, const Variant::Value& query, std::function<void(Variant::Value&& result, const std::string& error)>& callback);
+    void query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback);
 };
 
 /**

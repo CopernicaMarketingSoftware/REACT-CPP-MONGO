@@ -209,8 +209,24 @@ void Connection::connected(const std::function<void(bool connected)>& callback)
  *  @param  query       the query to execute
  *  @param  callback    the callback that will be called with the results
  */
-void Connection::query(const std::string& collection, const Variant::Value& query, std::function<void(Variant::Value&& result, const std::string& error)>& callback)
+void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
 {
+    // run the query in the worker
+    _worker.execute([this, collection, callback, query]() {
+        // execute query
+        auto cursor = _mongo.query(collection, convert(query));
+
+        // build the result value
+        std::vector<Variant::Value> result;
+
+        // process all results
+        while (cursor->more()) result.push_back(convert(cursor->next()));
+
+        // we now have all results, execute callback in master thread
+        _master.execute([result, callback]() {
+            callback(result, "");
+        });
+    });
 }
 
 /**
