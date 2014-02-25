@@ -12,6 +12,7 @@
  *  Dependencies
  */
 #include <reactcpp.h>
+#include <variant.h>
 #include <mongo/client/dbclient.h>
 #include <string>
 #include <vector>

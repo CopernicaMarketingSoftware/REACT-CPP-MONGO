@@ -29,9 +29,30 @@ private:
     React::Worker _worker;
 
     /**
+     *  Worker for main thread
+     */
+    React::Worker _master;
+
+    /**
      *  Underlying connection to mongo
      */
     mongo::DBClientConnection _mongo;
+
+    /**
+     *  Convert a Variant object to a bson object
+     *  used by the underlying mongo driver
+     *
+     *  @param  value   the value to convert
+     */
+    mongo::BSONObj convert(const Variant::Value& value);
+
+    /**
+     *  Convert a mongo bson object used in the
+     *  underlying library to a Variant object
+     *
+     *  @param  value   the value to convert
+     */
+    Variant::Value convert(const mongo::BSONObj& value);
 public:
     /**
      *  Establish a connection to a mongo daemon or mongos instance.
@@ -52,6 +73,15 @@ public:
      *  @param  callback    the callback that will be informed of the connection status
      */
     void connected(const std::function<void(bool connected)>& callback);
+
+    /**
+     *  Query a collection
+     *
+     *  @param  collection  database name and collection
+     *  @param  query       the query to execute
+     *  @param  callback    the callback that will be called with the results
+     */
+    void query(const std::string& collection, const Variant::Value& query, std::function<void(Variant::Value&& result, const std::string& error)>& callback);
 };
 
 /**
