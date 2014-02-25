@@ -133,11 +133,11 @@ Variant::Value Connection::convert(const mongo::BSONObj& value)
         // check the element type
         switch (element.type())
         {
-            case mongo::String:     return Variant::Value{element.str()};
+            case mongo::String:     return Variant::Value(element.str());
             case mongo::Object:     return convert(element.Obj());
             case mongo::Array:      return convert(element.Obj());
-            case mongo::jstNULL:    return Variant::Value{nullptr};
-            case mongo::NumberInt:  return Variant::Value{element.numberInt()};
+            case mongo::jstNULL:    return Variant::Value(nullptr);
+            case mongo::NumberInt:  return Variant::Value(element.numberInt());
             default:
                 // unsupported type
                 return Variant::Value{};
