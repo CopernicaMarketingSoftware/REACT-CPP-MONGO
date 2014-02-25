@@ -93,6 +93,19 @@ public:
      *  @param  query       the query to execute
      *  @param  callback    the callback that will be called with the results
      */
+    void query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback);
+
+    /**
+     *  Query a collection
+     *
+     *  Note:   This function will make a copy of the query object. This
+     *          can be useful when you want to reuse the given query object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  database name and collection
+     *  @param  query       the query to execute
+     *  @param  callback    the callback that will be called with the results
+     */
     void query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback);
 };
 

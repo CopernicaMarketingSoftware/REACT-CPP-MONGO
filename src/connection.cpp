@@ -240,24 +240,54 @@ void Connection::connected(const std::function<void(bool connected)>& callback)
  *  @param  query       the query to execute
  *  @param  callback    the callback that will be called with the results
  */
-void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
+void Connection::query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
 {
+    // move the query to a pointer to avoid needless copying
+    auto *request = new Variant::Value(std::move(query));
+
     // run the query in the worker
-    _worker.execute([this, collection, callback, query]() {
+    _worker.execute([this, collection, callback, request]() {
         // execute query
-        auto cursor = _mongo.query(collection, convert(query));
+        auto cursor = _mongo.query(collection, convert(*request));
+
+        // clean up the query object
+        delete request;
 
         // build the result value
-        std::vector<Variant::Value> result;
+        auto *result = new std::vector<Variant::Value>;
 
         // process all results
-        while (cursor->more()) result.push_back(convert(cursor->next()));
+        while (cursor->more()) result->push_back(convert(cursor->next()));
 
         // we now have all results, execute callback in master thread
         _master.execute([result, callback]() {
-            callback(result, "");
+            // execute callback
+            callback(*result, "");
+
+            // clean up the result object
+            delete result;
         });
     });
+}
+
+/**
+ *  Query a collection
+ *
+ *  Note:   This function will make a copy of the query object. This
+ *          can be useful when you want to reuse the given query object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  database name and collection
+ *  @param  query       the query to execute
+ *  @param  callback    the callback that will be called with the results
+ */
+void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
+{
+    // make a copy of the query
+    Variant::Value copy(query);
+
+    // move the copy to the implementation
+    this->query(collection, std::move(copy), callback);
 }
 
 /**
