@@ -451,6 +451,257 @@ void Connection::insert(const std::string& collection, const Variant::Value& doc
 }
 
 /**
+ *  Update an existing document in a collection
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  document    the new document to replace existing document with
+ *  @param  callback    the callback that will be informed when update is complete or failed
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+{
+    // move the query and document to a pointer to avoid needless copying
+    auto request = new Variant::Value(std::move(query));
+    auto *update = new Variant::Value(std::move(document));
+
+    // run the update in the worker
+    _worker.execute([this, collection, request, update, callback, upsert, multi]() {
+        try
+        {
+            // execute the update
+            _mongo.update(collection, convert(*request), convert(*update), upsert, multi);
+
+            // clean up
+            delete request;
+            delete update;
+
+            // the error that could have occured
+            auto error = _mongo.getLastError();
+
+            // check whether an error occured
+            if (error.empty())
+            {
+                // inform the listener the insert is done
+                _master.execute([callback]() {
+                    callback(NULL);
+                });
+            }
+            else
+            {
+                // something freaky just happened, inform the listener
+                _master.execute([callback, error]() {
+                    callback(error.c_str());
+                });
+            }
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // clean up
+            delete request;
+            delete update;
+
+            // infor the listener of the failure
+            _master.execute([callback, exception]() {
+                callback(exception.toString().c_str());
+            });
+        }
+    });
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  Note:   This function will make a copy of the query object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  callback    the callback that will be informed when update is complete or failed
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  Note:   This function will make a copy of the document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  callback    the callback that will be informed when update is complete or failed
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  Note:   This function will make a copy of the query and document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  callback    the callback that will be informed when update is complete or failed
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert, bool multi)
+{
+    // move the query and document to a pointer to avoid needless copying
+    auto request = new Variant::Value(std::move(query));
+    auto *update = new Variant::Value(std::move(document));
+
+    // run the update in the worker
+    _worker.execute([this, collection, request, update, upsert, multi]() {
+        try
+        {
+            // execute the update
+            _mongo.update(collection, convert(*request), convert(*update), upsert, multi);
+
+            // clean up
+            delete request;
+            delete update;
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // clean up
+            delete request;
+            delete update;
+        }
+    });
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  Note:   This function will make a copy of the query object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), upsert, multi);
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  Note:   This function will make a copy of the document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), upsert, multi);
+}
+
+/**
+ *  Update an existing document in a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  Note:   This function will make a copy of the query and document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection keeping the document to be updated
+ *  @param  query       the query to find the document(s) to update
+ *  @param  document    the new document to replace existing document with
+ *  @param  upsert      if no matching document was found, create one instead
+ *  @param  multi       if multiple matching documents are found, update them all
+ */
+
+void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert, bool multi)
+{
+    // move copies to the implementation
+    update(collection, std::move(query), std::move(document), upsert, multi);
+}
+
+/**
  *  End namespace
  */
 }

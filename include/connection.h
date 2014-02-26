@@ -165,6 +165,162 @@ public:
      *  @param  document    document to insert
      */
     void insert(const std::string& collection, const Variant::Value& document);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  callback    the callback that will be informed when update is complete or failed
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  Note:   This function will make a copy of the query object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  callback    the callback that will be informed when update is complete or failed
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  Note:   This function will make a copy of the document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  callback    the callback that will be informed when update is complete or failed
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  Note:   This function will make a copy of the query and document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  callback    the callback that will be informed when update is complete or failed
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  This function does not report on whether the insert was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  This function does not report on whether the insert was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  Note:   This function will make a copy of the query object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  This function does not report on whether the insert was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  Note:   This function will make a copy of the document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert = false, bool multi = false);
+
+    /**
+     *  Update an existing document in a collection
+     *
+     *  This function does not report on whether the insert was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  Note:   This function will make a copy of the query and document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection keeping the document to be updated
+     *  @param  query       the query to find the document(s) to update
+     *  @param  document    the new document to replace existing document with
+     *  @param  upsert      if no matching document was found, create one instead
+     *  @param  multi       if multiple matching documents are found, update them all
+     */
+
+    void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert = false, bool multi = false);
 };
 
 /**
