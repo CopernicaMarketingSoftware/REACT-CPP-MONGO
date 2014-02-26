@@ -77,7 +77,7 @@ public:
      *  @param  host        single server to connect to
      *  @param  callback    callback that will be executed when the connection is established or an error occured
      */
-    Connection(React::Loop *loop, const std::string& host, const std::function<void(bool connected, const std::string& error)>& callback);
+    Connection(React::Loop *loop, const std::string& host, const std::function<void(const char *error)>& callback);
 
     /**
      *  Get whether we are connected to mongo?
@@ -93,7 +93,7 @@ public:
      *  @param  query       the query to execute
      *  @param  callback    the callback that will be called with the results
      */
-    void query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback);
+    void query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const char *error)>& callback);
 
     /**
      *  Query a collection
@@ -106,7 +106,7 @@ public:
      *  @param  query       the query to execute
      *  @param  callback    the callback that will be called with the results
      */
-    void query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback);
+    void query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback);
 };
 
 /**

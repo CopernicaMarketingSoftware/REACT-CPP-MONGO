@@ -55,7 +55,7 @@ Connection::Connection(React::Loop *loop, const std::string& host) :
  *  @param  host        single server to connect to
  *  @param  callback    callback that will be executed when the connection is established or an error occured
  */
-Connection::Connection(React::Loop *loop, const std::string& host, const std::function<void(bool connected, const std::string& error)>& callback) :
+Connection::Connection(React::Loop *loop, const std::string& host, const std::function<void(const char *error)>& callback) :
     _loop(loop),
     _worker(loop),
     _master()
@@ -70,14 +70,14 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
 
             // so if we get here we are connected
             _master.execute([callback]() {
-                callback(true, "");
+                callback(NULL);
             });
         }
         catch (const mongo::DBException& exception)
         {
             // something went awry, notify the listener
             _master.execute([callback, exception]() {
-                callback(false, exception.what());
+                callback(exception.toString().c_str());
             });
         }
     });
@@ -240,33 +240,64 @@ void Connection::connected(const std::function<void(bool connected)>& callback)
  *  @param  query       the query to execute
  *  @param  callback    the callback that will be called with the results
  */
-void Connection::query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
+void Connection::query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
 {
     // move the query to a pointer to avoid needless copying
     auto *request = new Variant::Value(std::move(query));
 
     // run the query in the worker
     _worker.execute([this, collection, callback, request]() {
-        // execute query
-        auto cursor = _mongo.query(collection, convert(*request));
+        try
+        {
+            // execute query
+            auto cursor = _mongo.query(collection, convert(*request));
 
-        // clean up the query object
-        delete request;
+            // clean up the query object
+            delete request;
 
-        // build the result value
-        auto *result = new std::vector<Variant::Value>;
+            /**
+             *  Even though mongo can throw exceptions for the query
+             *  function, it communicates connection failures not by
+             *  throwing an exception, but instead returning 0 when
+             *  a connection failure occurs, so we check for this.
+             */
+            if (cursor.get() == NULL)
+            {
+                // notify listener that a connection failure occured
+                _master.execute([callback]() {
+                    callback(Variant::Value{}, "Unspecified connection error");
+                });
 
-        // process all results
-        while (cursor->more()) result->push_back(convert(cursor->next()));
+                // don't try to read from the cursor
+                return;
+            }
 
-        // we now have all results, execute callback in master thread
-        _master.execute([result, callback]() {
-            // execute callback
-            callback(*result, "");
+            // build the result value
+            auto *result = new std::vector<Variant::Value>;
 
-            // clean up the result object
-            delete result;
-        });
+            // process all results
+            while (cursor->more()) result->push_back(convert(cursor->next()));
+
+            // we now have all results, execute callback in master thread
+            _master.execute([result, callback]() {
+                // execute callback
+                callback(*result, "");
+
+                // clean up the result object
+                delete result;
+            });
+        }
+        catch (mongo::AssertionException &exception)
+        {
+            // clean up the query object
+            delete request;
+
+            // something went awry, notify listener
+            _master.execute([callback, exception]() {
+                // run callback with an empty result object and an error message
+                callback(Variant::Value{}, exception.toString().c_str());
+            });
+        }
     });
 }
 
@@ -281,7 +312,7 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
  *  @param  query       the query to execute
  *  @param  callback    the callback that will be called with the results
  */
-void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const std::string& error)>& callback)
+void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
 {
     // make a copy of the query
     Variant::Value copy(query);
