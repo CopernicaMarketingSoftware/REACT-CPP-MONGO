@@ -502,7 +502,7 @@ void Connection::update(const std::string& collection, Variant::Value&& query, V
             delete request;
             delete update;
 
-            // infor the listener of the failure
+            // inform the listener of the failure
             _master.execute([callback, exception]() {
                 callback(exception.toString().c_str());
             });
@@ -699,6 +699,142 @@ void Connection::update(const std::string& collection, const Variant::Value& que
 {
     // move copies to the implementation
     update(collection, std::move(query), std::move(document), upsert, multi);
+}
+
+/**
+ *  Remove one or more existing documents from a collection
+ *
+ *  @param  collection  collection holding the document(s) to be removed
+ *  @param  query       the query to find the document(s) to remove
+ *  @param  callback    the callback that will be informed once the delete is complete or failed
+ *  @param  limitToOne  limit the removal to a single document
+ */
+void Connection::remove(const std::string& collection, Variant::Value&& query, const std::function<void(const char *error)>& callback, bool limitToOne)
+{
+    // move the query to a pointer to avoid needless copying
+    auto *request = new Variant::Value(std::move(query));
+
+    // run the remove in the worker
+    _worker.execute([this, collection, request, callback, limitToOne]() {
+        try
+        {
+            // execute remove query
+            _mongo.remove(collection, convert(*request), limitToOne);
+
+            // free the request
+            delete request;
+
+            // the error that could have occured
+            auto error = _mongo.getLastError();
+
+            // check whether an error occured
+            if (error.empty())
+            {
+                // inform the listener the insert is done
+                _master.execute([callback]() {
+                    callback(NULL);
+                });
+            }
+            else
+            {
+                // something freaky just happened, inform the listener
+                _master.execute([callback, error]() {
+                    callback(error.c_str());
+                });
+            }
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // free the request
+            delete request;
+
+            // inform the listener of the failure
+            _master.execute([callback, exception]() {
+                callback(exception.toString().c_str());
+            });
+        }
+    });
+}
+
+/**
+ *  Remove one or more existing documents from a collection
+ *
+ *  Note:   This function will make a copy of the query object.
+ *          This can be useful when you want to reuse the given query object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection holding the document(s) to be removed
+ *  @param  query       the query to find the document(s) to remove
+ *  @param  callback    the callback that will be informed once the delete is complete or failed
+ *  @param  limitToOne  limit the removal to a single document
+ */
+void Connection::remove(const std::string& collection, const Variant::Value& query, const std::function<void(const char *error)>& callback, bool limitToOne)
+{
+    // move copy to the implementation
+    remove(collection, std::move(query), callback, limitToOne);
+}
+
+/**
+ *  Remove one or more existing documents from a collection
+ *
+ *  This function does not report on whether the remove was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  @param  collection  collection holding the document(s) to be removed
+ *  @param  query       the query to find the document(s) to remove
+ *  @param  limitToOne  limit the removal to a single document
+ */
+void Connection::remove(const std::string& collection, Variant::Value&& query, bool limitToOne)
+{
+    // move the query to a pointer to avoid needless copying
+    auto *request = new Variant::Value(std::move(query));
+
+    // run the remove in the worker
+    _worker.execute([this, collection, request, limitToOne]() {
+        try
+        {
+            // execute remove query
+            _mongo.remove(collection, convert(*request), limitToOne);
+
+            // free the request
+            delete request;
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // free the request
+            delete request;
+        }
+    });
+}
+
+/**
+ *  Remove one or more existing documents from a collection
+ *
+ *  This function does not report on whether the remove was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  Note:   This function will make a copy of the query object.
+ *          This can be useful when you want to reuse the given query object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  collection holding the document(s) to be removed
+ *  @param  query       the query to find the document(s) to remove
+ *  @param  limitToOne  limit the removal to a single document
+ */
+void Connection::remove(const std::string& collection, const Variant::Value& query, bool limitToOne)
+{
+    // move copy to the implementation
+    remove(collection, std::move(query), limitToOne);
 }
 
 /**

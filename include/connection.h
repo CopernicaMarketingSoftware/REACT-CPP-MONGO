@@ -176,7 +176,6 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
 
     /**
@@ -193,7 +192,6 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
 
     /**
@@ -210,7 +208,6 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
 
     /**
@@ -227,13 +224,12 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
      *
-     *  This function does not report on whether the insert was successful
+     *  This function does not report on whether the update was successful
      *  or not. It avoids a little bit of overhead from context switches
      *  and a roundtrip to mongo to retrieve the last eror, and is
      *  therefore a little faster.
@@ -247,13 +243,12 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
      *
-     *  This function does not report on whether the insert was successful
+     *  This function does not report on whether the update was successful
      *  or not. It avoids a little bit of overhead from context switches
      *  and a roundtrip to mongo to retrieve the last eror, and is
      *  therefore a little faster.
@@ -271,13 +266,12 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
      *
-     *  This function does not report on whether the insert was successful
+     *  This function does not report on whether the update was successful
      *  or not. It avoids a little bit of overhead from context switches
      *  and a roundtrip to mongo to retrieve the last eror, and is
      *  therefore a little faster.
@@ -295,13 +289,12 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
      *
-     *  This function does not report on whether the insert was successful
+     *  This function does not report on whether the update was successful
      *  or not. It avoids a little bit of overhead from context switches
      *  and a roundtrip to mongo to retrieve the last eror, and is
      *  therefore a little faster.
@@ -319,8 +312,69 @@ public:
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-
     void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert = false, bool multi = false);
+
+    /**
+     *  Remove one or more existing documents from a collection
+     *
+     *  @param  collection  collection holding the document(s) to be removed
+     *  @param  query       the query to find the document(s) to remove
+     *  @param  callback    the callback that will be informed once the delete is complete or failed
+     *  @param  limitToOne  limit the removal to a single document
+     */
+    void remove(const std::string& collection, Variant::Value&& query, const std::function<void(const char *error)>& callback, bool limitToOne = false);
+
+    /**
+     *  Remove one or more existing documents from a collection
+     *
+     *  Note:   This function will make a copy of the query object.
+     *          This can be useful when you want to reuse the given query object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection holding the document(s) to be removed
+     *  @param  query       the query to find the document(s) to remove
+     *  @param  callback    the callback that will be informed once the delete is complete or failed
+     *  @param  limitToOne  limit the removal to a single document
+     */
+    void remove(const std::string& collection, const Variant::Value& query, const std::function<void(const char *error)>& callback, bool limitToOne = false);
+
+    /**
+     *  Remove one or more existing documents from a collection
+     *
+     *  This function does not report on whether the remove was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  @param  collection  collection holding the document(s) to be removed
+     *  @param  query       the query to find the document(s) to remove
+     *  @param  limitToOne  limit the removal to a single document
+     */
+    void remove(const std::string& collection, Variant::Value&& query, bool limitToOne = false);
+
+    /**
+     *  Remove one or more existing documents from a collection
+     *
+     *  This function does not report on whether the remove was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  Note:   This function will make a copy of the query object.
+     *          This can be useful when you want to reuse the given query object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  collection  collection holding the document(s) to be removed
+     *  @param  query       the query to find the document(s) to remove
+     *  @param  limitToOne  limit the removal to a single document
+     */
+    void remove(const std::string& collection, const Variant::Value& query, bool limitToOne = false);
 };
 
 /**
