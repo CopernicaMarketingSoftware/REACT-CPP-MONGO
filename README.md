@@ -75,6 +75,19 @@ This can be useful when e.g. storing cached data, that could easily be created
 again in case the insert failed. They are significantly faster because checking
 for an error takes an extra roundtrip to the mongodb server.
 
+When we are not interested in the result of an insert operation, we could have
+written the previous example like this:
+
+```c
+Variant::Value document;
+document["name"] = "Example User";
+document["email"] = "info@example.org";
+document["address"]["city"] = "Gotham City";
+document["address"]["phone"] = "555-BATMAN";
+
+mongo.insert("database.collection", std::move(document));
+```
+
 MOVING DATA
 ===========
 You might have noticed that when we pass a document to the library, we have used
