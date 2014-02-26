@@ -314,11 +314,140 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
  */
 void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
 {
-    // make a copy of the query
-    Variant::Value copy(query);
+    // move a copy to the implementation
+    this->query(collection, std::move(query), callback);
+}
 
-    // move the copy to the implementation
-    this->query(collection, std::move(copy), callback);
+/**
+ *  Insert a document into a collection
+ *
+ *  @param  collection  database name and collection
+ *  @param  document    document to insert
+ *  @param  callback    the callback that will be informed when insert is complete or failed
+ */
+void Connection::insert(const std::string& collection, Variant::Value&& document, const std::function<void(const char *error)>& callback)
+{
+    // move the document to a pointer to avoid needless copying
+    auto *insert = new Variant::Value(std::move(document));
+
+    // run the insert in the worker
+    _worker.execute([this, collection, insert, callback]() {
+        try
+        {
+            // execute the insert
+            _mongo.insert(collection, convert(*insert));
+
+            // free up the document
+            delete insert;
+
+            // the error that could have occured
+            auto error = _mongo.getLastError();
+
+            // check whether an error occured
+            if (error.empty())
+            {
+                // inform the listener the insert is done
+                _master.execute([callback]() {
+                    callback(NULL);
+                });
+            }
+            else
+            {
+                // something freaky just happened, inform the listener
+                _master.execute([callback, error]() {
+                    callback(error.c_str());
+                });
+            }
+        }
+        catch (mongo::DBException& exception)
+        {
+            // free up the document
+            delete insert;
+
+            // inform the listener of the specific failure
+            _master.execute([callback, exception]() {
+                callback(exception.toString().c_str());
+            });
+        }
+    });
+}
+
+/**
+ *  Insert a document into a collection
+ *
+ *  Note:   This function will make a copy of the document object. This
+ *          can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  database name and collection
+ *  @param  document    document to insert
+ *  @param  callback    the callback that will be informed when insert is complete or failed
+ */
+void Connection::insert(const std::string& collection, const Variant::Value& document, const std::function<void(const char *error)>& callback)
+{
+    // move a copy to the implementation
+    insert(collection, std::move(document), callback);
+}
+
+/**
+ *  Insert a document into a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  @param  collection  database name and collection
+ *  @param  document    document to insert
+ */
+void Connection::insert(const std::string& collection, Variant::Value&& document)
+{
+    // move the document to a pointer to avoid needless copying
+    auto *insert = new Variant::Value(std::move(document));
+
+    // run the insert in the worker
+    _worker.execute([this, collection, insert]() {
+        try
+        {
+            // execute the insert
+            _mongo.insert(collection, convert(*insert));
+
+            // free up the document
+            delete insert;
+        }
+        catch (mongo::DBException& exception)
+        {
+            // free up the document
+            delete insert;
+        }
+    });
+}
+
+/**
+ *  Insert a document into a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  Note:   This function will make a copy of the document object. This
+ *          can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  collection  database name and collection
+ *  @param  document    document to insert
+ */
+void Connection::insert(const std::string& collection, const Variant::Value& document)
+{
+    // move a copy to the implementation
+    insert(collection, std::move(document));
 }
 
 /**
