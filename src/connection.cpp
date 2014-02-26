@@ -12,7 +12,7 @@
 /**
  *  Set up namespace
  */
-namespace Mongo {
+namespace React { namespace Mongo {
 
 /**
  *  Establish a connection to a mongo daemon or mongos instance.
@@ -840,4 +840,4 @@ void Connection::remove(const std::string& collection, const Variant::Value& que
 /**
  *  End namespace
  */
-}
+}}

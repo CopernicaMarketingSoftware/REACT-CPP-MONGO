@@ -10,7 +10,7 @@
 /**
  *  Set up namespace
  */
-namespace Mongo {
+namespace React { namespace Mongo {
 
 /**
  *  Connection class
@@ -380,4 +380,4 @@ public:
 /**
  *  End namespace
  */
-}
+}}
