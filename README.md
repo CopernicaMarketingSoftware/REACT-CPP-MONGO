@@ -25,7 +25,7 @@ React::Mongo::Connection mongo("mongodb.example.org", [](const char *error) {
 
 // build a query to find a specific document
 Variant::Value query;
-query["id"] = "documentid";
+query["_id"] = "documentid";
 
 // retrieve the document
 mongo.query("database.collection", std::move(query), [](Variant::Value&& result, const char *error) {
@@ -36,8 +36,16 @@ mongo.query("database.collection", std::move(query), [](Variant::Value&& result,
         return;
     }
 
+    // since we search for an exact id, we will get a maximum of one result
+    // however, this result will always be an array
+    if (result.size() == 0)
+    {
+        std::cout << "Could not find any document with that ID" << std::endl;
+        return;
+    }
+
     // assume that the document has a string field named 'firstname'
-    std::string firstname = result["firstname"];
+    std::string firstname = result[0]["firstname"];
 });
 ```
 
