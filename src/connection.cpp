@@ -281,13 +281,13 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
             // we now have all results, execute callback in master thread
             _master.execute([result, callback]() {
                 // execute callback
-                callback(*result, "");
+                callback(*result, NULL);
 
                 // clean up the result object
                 delete result;
             });
         }
-        catch (mongo::AssertionException &exception)
+        catch (mongo::DBException& exception)
         {
             // clean up the query object
             delete request;
