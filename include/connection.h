@@ -77,7 +77,7 @@ public:
      *  @param  host        single server to connect to
      *  @param  callback    callback that will be executed when the connection is established or an error occured
      */
-    Connection(React::Loop *loop, const std::string& host, const std::function<void(const char *error)>& callback);
+    Connection(React::Loop *loop, const std::string& host, const std::function<void(Connection *connection, const char *error)>& callback);
 
     /**
      *  Get whether we are connected to mongo?

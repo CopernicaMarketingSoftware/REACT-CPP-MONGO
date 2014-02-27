@@ -7,7 +7,7 @@ This library works mostly the same as the regular mongo c++ library, except all 
 that will be called when results (or failure) are available.
 
 ```c
-React::Mongo::Connection mongo("mongodb.example.org", [](const char *error) {
+React::Mongo::Connection mongo("mongodb.example.org", [](React::Mongo::Connection *connection, const char *error) {
     // if no error occured, we will receive a null pointer
     if (!error) std::cout << "Connected successfully" << std::endl;
 
