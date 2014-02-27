@@ -65,12 +65,8 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
         // try to establish a connection to mongo
         try
         {
-            std::cout << "Connecting...";
-
             // connect throws an exception on failure
             _mongo.connect(host);
-
-            std::cout << " done!" << std::endl;
 
             // so if we get here we are connected
             _master.execute([this, callback]() {
@@ -79,8 +75,6 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
         }
         catch (const mongo::DBException& exception)
         {
-            std::cout << " oops!" << std::endl;
-
             // something went awry, notify the listener
             _master.execute([this, callback, exception]() {
                 callback(this, exception.toString().c_str());
