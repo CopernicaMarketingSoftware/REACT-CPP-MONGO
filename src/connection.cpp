@@ -65,8 +65,12 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
         // try to establish a connection to mongo
         try
         {
+            std::cout << "Connecting...";
+
             // connect throws an exception on failure
             _mongo.connect(host);
+
+            std::cout << " done!" << std::endl;
 
             // so if we get here we are connected
             _master.execute([this, callback]() {
@@ -75,6 +79,8 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
         }
         catch (const mongo::DBException& exception)
         {
+            std::cout << " oops!" << std::endl;
+
             // something went awry, notify the listener
             _master.execute([this, callback, exception]() {
                 callback(this, exception.toString().c_str());
@@ -315,7 +321,7 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
 void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
 {
     // move a copy to the implementation
-    this->query(collection, std::move(query), callback);
+    this->query(collection, Variant::Value(query), callback);
 }
 
 /**
@@ -386,7 +392,7 @@ void Connection::insert(const std::string& collection, Variant::Value&& document
 void Connection::insert(const std::string& collection, const Variant::Value& document, const std::function<void(const char *error)>& callback)
 {
     // move a copy to the implementation
-    insert(collection, std::move(document), callback);
+    insert(collection, Variant::Value(document), callback);
 }
 
 /**
@@ -447,7 +453,7 @@ void Connection::insert(const std::string& collection, Variant::Value&& document
 void Connection::insert(const std::string& collection, const Variant::Value& document)
 {
     // move a copy to the implementation
-    insert(collection, std::move(document));
+    insert(collection, Variant::Value(document));
 }
 
 /**
@@ -528,7 +534,7 @@ void Connection::update(const std::string& collection, Variant::Value&& query, V
 void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+    update(collection, Variant::Value(query), std::move(document), callback, upsert, multi);
 }
 
 /**
@@ -549,7 +555,7 @@ void Connection::update(const std::string& collection, const Variant::Value& que
 void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+    update(collection, std::move(query), Variant::Value(document), callback, upsert, multi);
 }
 
 /**
@@ -570,7 +576,7 @@ void Connection::update(const std::string& collection, Variant::Value&& query, c
 void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), callback, upsert, multi);
+    update(collection, Variant::Value(query), Variant::Value(document), callback, upsert, multi);
 }
 
 /**
@@ -642,7 +648,7 @@ void Connection::update(const std::string& collection, Variant::Value&& query, V
 void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), upsert, multi);
+    update(collection, Variant::Value(query), std::move(document), upsert, multi);
 }
 
 /**
@@ -670,7 +676,7 @@ void Connection::update(const std::string& collection, const Variant::Value& que
 void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), upsert, multi);
+    update(collection, std::move(query), Variant::Value(document), upsert, multi);
 }
 
 /**
@@ -698,7 +704,7 @@ void Connection::update(const std::string& collection, Variant::Value&& query, c
 void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), std::move(document), upsert, multi);
+    update(collection, Variant::Value(query), Variant::Value(document), upsert, multi);
 }
 
 /**
@@ -771,7 +777,7 @@ void Connection::remove(const std::string& collection, Variant::Value&& query, c
 void Connection::remove(const std::string& collection, const Variant::Value& query, const std::function<void(const char *error)>& callback, bool limitToOne)
 {
     // move copy to the implementation
-    remove(collection, std::move(query), callback, limitToOne);
+    remove(collection, Variant::Value(query), callback, limitToOne);
 }
 
 /**
@@ -834,7 +840,7 @@ void Connection::remove(const std::string& collection, Variant::Value&& query, b
 void Connection::remove(const std::string& collection, const Variant::Value& query, bool limitToOne)
 {
     // move copy to the implementation
-    remove(collection, std::move(query), limitToOne);
+    remove(collection, Variant::Value(query), limitToOne);
 }
 
 /**
