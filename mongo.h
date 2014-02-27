@@ -21,7 +21,7 @@
 /**
  *  Other include files
  */
-#include <mongocpp/connection.h>
+#include <react/mongo/connection.h>
 
 /**
  *  End if
