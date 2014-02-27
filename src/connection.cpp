@@ -55,7 +55,7 @@ Connection::Connection(React::Loop *loop, const std::string& host) :
  *  @param  host        single server to connect to
  *  @param  callback    callback that will be executed when the connection is established or an error occured
  */
-Connection::Connection(React::Loop *loop, const std::string& host, const std::function<void(const char *error)>& callback) :
+Connection::Connection(React::Loop *loop, const std::string& host, const std::function<void(Connection *connection, const char *error)>& callback) :
     _loop(loop),
     _worker(loop),
     _master()
@@ -69,15 +69,15 @@ Connection::Connection(React::Loop *loop, const std::string& host, const std::fu
             _mongo.connect(host);
 
             // so if we get here we are connected
-            _master.execute([callback]() {
-                callback(NULL);
+            _master.execute([this, callback]() {
+                callback(this, NULL);
             });
         }
         catch (const mongo::DBException& exception)
         {
             // something went awry, notify the listener
-            _master.execute([callback, exception]() {
-                callback(exception.toString().c_str());
+            _master.execute([this, callback, exception]() {
+                callback(this, exception.toString().c_str());
             });
         }
     });
