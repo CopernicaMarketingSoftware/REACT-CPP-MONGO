@@ -113,7 +113,9 @@ mongo::BSONObj Connection::convert(const Variant::Value& value)
             switch (item.type())
             {
                 case Variant::ValueNullType:    builder.appendNull();               break;
+                case Variant::ValueBoolType:    builder.append((bool) item);        break;
                 case Variant::ValueIntType:     builder.append((int) item);         break;
+                case Variant::ValueDoubleType:  builder.append((double) item);      break;
                 case Variant::ValueStringType:  builder.append((std::string) item); break;
                 case Variant::ValueVectorType:  builder.append(convert(item));      break;
                 case Variant::ValueMapType:     builder.append(convert(item));      break;
@@ -142,7 +144,9 @@ mongo::BSONObj Connection::convert(const Variant::Value& value)
             switch (member.second.type())
             {
                 case Variant::ValueNullType:    builder.appendNull(member.first);                           break;
+                case Variant::ValueBoolType:    builder.append(member.first, (bool) member.second);         break;
                 case Variant::ValueIntType:     builder.append(member.first, (int) member.second);          break;
+                case Variant::ValueDoubleType:  builder.append(member.first, (double) member.second);       break;
                 case Variant::ValueStringType:  builder.append(member.first, (std::string) member.second);  break;
                 case Variant::ValueVectorType:  builder.append(member.first, convert(member.second));       break;
                 case Variant::ValueMapType:     builder.append(member.first, convert(member.second));       break;
@@ -170,11 +174,13 @@ Variant::Value Connection::convert(const mongo::BSONObj& value)
         // check the element type
         switch (element.type())
         {
-            case mongo::String:     return Variant::Value(element.str());
-            case mongo::Object:     return convert(element.Obj());
-            case mongo::Array:      return convert(element.Obj());
-            case mongo::jstNULL:    return Variant::Value(nullptr);
-            case mongo::NumberInt:  return Variant::Value(element.numberInt());
+            case mongo::NumberDouble:   return  Variant::Value(element.numberDouble());
+            case mongo::String:         return Variant::Value(element.str());
+            case mongo::Object:         return convert(element.Obj());
+            case mongo::Array:          return convert(element.Obj());
+            case mongo::Bool:           return Variant::Value(element.boolean());
+            case mongo::jstNULL:        return Variant::Value(nullptr);
+            case mongo::NumberInt:      return Variant::Value(element.numberInt());
             default:
                 // unsupported type
                 return Variant::Value{};
