@@ -168,7 +168,7 @@ Variant::Value Connection::convert(const mongo::BSONObj& value)
         // check the element type
         switch (element.type())
         {
-            case mongo::NumberDouble:   return  Variant::Value(element.numberDouble());
+            case mongo::NumberDouble:   return Variant::Value(element.numberDouble());
             case mongo::String:         return Variant::Value(element.str());
             case mongo::Object:         return convert(element.Obj());
             case mongo::Array:          return convert(element.Obj());
@@ -841,6 +841,155 @@ void Connection::remove(const std::string& collection, const Variant::Value& que
 {
     // move copy to the implementation
     remove(collection, Variant::Value(query), limitToOne);
+}
+
+/**
+ *  Run a command on the connection.
+ *
+ *  This is the general way to run commands on the database that are
+ *  not (yet) part of the driver. This allows you to run new commands
+ *  available in the mongodb daemon.
+ *
+ *  Note:   This function will make a copy of the query and document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  database    the database to run the command on (not including the collection name)
+ *  @param  command     the command to execute
+ *  @param  callback    callback to receive the result
+ */
+void Connection::runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback)
+{
+    // move the query to a pointer to avoid needless copying
+    auto *request = new Variant::Value(std::move(query));
+
+    // run the command in the worker
+    _worker.execute([this, database, request, callback]() {
+        try
+        {
+            // create a new mongo object, because for some reason
+            // the mongo library does not return one here, it wants
+            // it to be passed in by reference so that it can modify
+            // it for us. sort of like we're back in plain C.
+            mongo::BSONObj result;
+
+            // execute the command
+            _mongo.runCommand(database, convert(*request), result);
+
+            // clean up the request
+            delete request;
+
+            // convert the result to a Variant
+            auto *output = new Variant::Value(convert(result));
+
+            // and execute the callback
+            _master.execute([callback, output]() {
+                callback(std::move(*output));
+                delete output;
+            });
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // clean up the request
+            delete request;
+
+            // run the callback from the master context
+            _master.execute([callback, exception]() {
+                // sigh, mongo decided to throw an exception here
+                // instead of setting ok to false and adding an
+                // error in the object like it does for most errors
+                // occuring during runCommand, we simulate mongos
+                // normal behavior by creating the object ourselves
+                Variant::Value result;
+
+                // set the relevant values
+                result["ok"] = false;
+                result["error"] = exception.toString().c_str();
+
+                // pass the simulated error to the callback
+                callback(std::move(result));
+            });
+        }
+    });
+}
+
+/**
+ *  Run a command on the connection.
+ *
+ *  This is the general way to run commands on the database that are
+ *  not (yet) part of the driver. This allows you to run new commands
+ *  available in the mongodb daemon.
+ *
+ *  @param  database    the database to run the command on (not including the collection name)
+ *  @param  command     the command to execute
+ *  @param  callback    callback to receive the result
+ */
+void Connection::runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback)
+{
+    // move copy to the implementation
+    runCommand(database, Variant::Value(query), callback);
+}
+
+/**
+ *  Run a command on the connection.
+ *
+ *  This is the general way to run commands on the database that are
+ *  not (yet) part of the driver. This allows you to run new commands
+ *  available in the mongodb daemon.
+ *
+ *  Note:   This function will make a copy of the query and document object.
+ *          This can be useful when you want to reuse the given document object,
+ *          otherwise it is best to pass in an rvalue and avoid the copy.
+ *
+ *  @param  database    the database to run the command on (not including the collection name)
+ *  @param  command     the command to execute
+ */
+void Connection::runCommand(const std::string& database, const Variant::Value& query)
+{
+    // move the query to a pointer to avoid needless copying
+    auto *request = new Variant::Value(std::move(query));
+
+    // run the command in the worker
+    _worker.execute([this, database, request]() {
+        try
+        {
+            // create a new mongo object, because for some reason
+            // the mongo library does not return one here, it wants
+            // it to be passed in by reference so that it can modify
+            // it for us. sort of like we're back in plain C.
+            //
+            // best part is we don't need it, but mongo absolutely
+            // needs this object and will fill it for us.
+            mongo::BSONObj result;
+
+            // execute the command
+            _mongo.runCommand(database, convert(*request), result);
+
+            // clean up the request
+            delete request;
+        }
+        catch (const mongo::DBException& exception)
+        {
+            // clean up the request
+            delete request;
+        }
+    });
+}
+
+/**
+ *  Run a command on the connection.
+ *
+ *  This is the general way to run commands on the database that are
+ *  not (yet) part of the driver. This allows you to run new commands
+ *  available in the mongodb daemon.
+ *
+ *  @param  database    the database to run the command on (not including the collection name)
+ *  @param  command     the command to execute
+ */
+void Connection::runCommand(const std::string& database, Variant::Value&& query)
+{
+    // move copy to the implementation
+    runCommand(database, Variant::Value(query));
 }
 
 /**

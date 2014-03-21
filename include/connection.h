@@ -375,6 +375,64 @@ public:
      *  @param  limitToOne  limit the removal to a single document
      */
     void remove(const std::string& collection, const Variant::Value& query, bool limitToOne = false);
+
+    /**
+     *  Run a command on the connection.
+     *
+     *  This is the general way to run commands on the database that are
+     *  not (yet) part of the driver. This allows you to run new commands
+     *  available in the mongodb daemon.
+     *
+     *  Note:   This function will make a copy of the query and document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  database    the database to run the command on (not including the collection name)
+     *  @param  command     the command to execute
+     *  @param  callback    callback to receive the result
+     */
+    void runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback);
+
+    /**
+     *  Run a command on the connection.
+     *
+     *  This is the general way to run commands on the database that are
+     *  not (yet) part of the driver. This allows you to run new commands
+     *  available in the mongodb daemon.
+     *
+     *  @param  database    the database to run the command on (not including the collection name)
+     *  @param  command     the command to execute
+     *  @param  callback    callback to receive the result
+     */
+    void runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback);
+
+    /**
+     *  Run a command on the connection.
+     *
+     *  This is the general way to run commands on the database that are
+     *  not (yet) part of the driver. This allows you to run new commands
+     *  available in the mongodb daemon.
+     *
+     *  Note:   This function will make a copy of the query and document object.
+     *          This can be useful when you want to reuse the given document object,
+     *          otherwise it is best to pass in an rvalue and avoid the copy.
+     *
+     *  @param  database    the database to run the command on (not including the collection name)
+     *  @param  command     the command to execute
+     */
+    void runCommand(const std::string& database, const Variant::Value& query);
+
+    /**
+     *  Run a command on the connection.
+     *
+     *  This is the general way to run commands on the database that are
+     *  not (yet) part of the driver. This allows you to run new commands
+     *  available in the mongodb daemon.
+     *
+     *  @param  database    the database to run the command on (not including the collection name)
+     *  @param  command     the command to execute
+     */
+    void runCommand(const std::string& database, Variant::Value&& query);
 };
 
 /**
