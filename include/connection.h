@@ -167,6 +167,31 @@ public:
     void insert(const std::string& collection, const Variant::Value& document);
 
     /**
+     *  Insert a batch of documents into a collection
+     *
+     *  @param  collection  database name and collection
+     *  @param  documents   documents to insert
+     *  @param  callback    the callback that will be informed when insert is complete or failed
+     */
+    void insert(const std::string& collection, const std::vector<Variant::Value>& documents, const std::function<void(const char *error)>& callback);
+
+    /**
+     *  Insert a batch of documents into a collection
+     *
+     *  This function does not report on whether the insert was successful
+     *  or not. It avoids a little bit of overhead from context switches
+     *  and a roundtrip to mongo to retrieve the last eror, and is
+     *  therefore a little faster.
+     *
+     *  It is best used for non-critical data, like cached data that can
+     *  easily be reconstructed if the data somehow does not reach mongo.
+     *
+     *  @param  collection  database name and collection
+     *  @param  documents   documents to insert
+     */
+    void insert(const std::string& collection, const std::vector<Variant::Value>& documents);
+
+    /**
      *  Update an existing document in a collection
      *
      *  @param  collection  collection keeping the document to be updated

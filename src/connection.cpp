@@ -457,6 +457,111 @@ void Connection::insert(const std::string& collection, const Variant::Value& doc
 }
 
 /**
+ *  Insert a batch of documents into a collection
+ *
+ *  @param  collection  database name and collection
+ *  @param  documents   documents to insert
+ *  @param  callback    the callback that will be informed when insert is complete or failed
+ */
+void Connection::insert(const std::string& collection, const std::vector<Variant::Value>& documents, const std::function<void(const char *error)>& callback)
+{
+    // create a new vector with the mongo objects
+    // we use a pointer to avoid needless copying
+    auto *insert = new std::vector<mongo::BSONObj>();
+
+    // allocate memory for the objects
+    insert->reserve(documents.size());
+
+    // insert all documents
+    for (auto &document : documents) insert->push_back(convert(document));
+
+    // run the insert in the worker
+    _worker.execute([this, collection, insert, callback]() {
+        try
+        {
+            // execute the insert
+            _mongo.insert(collection, *insert);
+
+            // free up the document
+            delete insert;
+
+            // the error that could have occured
+            auto error = _mongo.getLastError();
+
+            // check whether an error occured
+            if (error.empty())
+            {
+                // inform the listener the insert is done
+                _master.execute([callback]() {
+                    callback(NULL);
+                });
+            }
+            else
+            {
+                // something freaky just happened, inform the listener
+                _master.execute([callback, error]() {
+                    callback(error.c_str());
+                });
+            }
+        }
+        catch (mongo::DBException& exception)
+        {
+            // free up the document
+            delete insert;
+
+            // inform the listener of the specific failure
+            _master.execute([callback, exception]() {
+                callback(exception.toString().c_str());
+            });
+        }
+    });
+}
+
+/**
+ *  Insert a batch of documents into a collection
+ *
+ *  This function does not report on whether the insert was successful
+ *  or not. It avoids a little bit of overhead from context switches
+ *  and a roundtrip to mongo to retrieve the last eror, and is
+ *  therefore a little faster.
+ *
+ *  It is best used for non-critical data, like cached data that can
+ *  easily be reconstructed if the data somehow does not reach mongo.
+ *
+ *  @param  collection  database name and collection
+ *  @param  documents   documents to insert
+ */
+void Connection::insert(const std::string& collection, const std::vector<Variant::Value>& documents)
+{
+    // create a new vector with the mongo objects
+    // we use a pointer to avoid needless copying
+    auto *insert = new std::vector<mongo::BSONObj>();
+
+    // allocate memory for the objects
+    insert->reserve(documents.size());
+
+    // insert all documents
+    for (auto &document : documents) insert->push_back(convert(document));
+
+    // run the insert in the worker
+    _worker.execute([this, collection, insert]() {
+        try
+        {
+            // execute the insert
+            _mongo.insert(collection, *insert);
+
+            // free up the document
+            delete insert;
+        }
+        catch (mongo::DBException& exception)
+        {
+            // free up the document
+            delete insert;
+        }
+    });
+}
+
+/**
  *  Update an existing document in a collection
  *
  *  @param  collection  collection keeping the document to be updated
