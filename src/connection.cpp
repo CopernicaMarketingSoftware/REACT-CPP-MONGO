@@ -581,7 +581,7 @@ DeferredRemove& Connection::remove(const std::string& collection, const Variant:
  *  @param  database    the database to run the command on (not including the collection name)
  *  @param  command     the command to execute
  */
-DeferredCommand& Connection::runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback)
+DeferredCommand& Connection::runCommand(const std::string& database, Variant::Value&& query)
 {
     // move the query to a pointer to avoid needless copying
     auto request = std::make_shared<Variant::Value>(std::move(query));
@@ -641,10 +641,10 @@ DeferredCommand& Connection::runCommand(const std::string& database, Variant::Va
  *  @param  database    the database to run the command on (not including the collection name)
  *  @param  command     the command to execute
  */
-DeferredCommand& Connection::runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback)
+DeferredCommand& Connection::runCommand(const std::string& database, const Variant::Value& query)
 {
     // move copy to the implementation
-    return runCommand(database, Variant::Value(query), callback);
+    return runCommand(database, Variant::Value(query));
 }
 
 /**

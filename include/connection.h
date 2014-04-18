@@ -234,7 +234,7 @@ public:
      *  @param  database    the database to run the command on (not including the collection name)
      *  @param  command     the command to execute
      */
-    DeferredCommand& runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback);
+    DeferredCommand& runCommand(const std::string& database, const Variant::Value& query);
 
     /**
      *  Run a command on the connection.
@@ -246,7 +246,7 @@ public:
      *  @param  database    the database to run the command on (not including the collection name)
      *  @param  command     the command to execute
      */
-    DeferredCommand& runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback);
+    DeferredCommand& runCommand(const std::string& database, Variant::Value&& query);
 };
 
 /**
