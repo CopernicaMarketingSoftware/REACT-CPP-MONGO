@@ -36,49 +36,14 @@ Connection::Connection(React::Loop *loop, const std::string& host) :
         {
             // connect throws an exception on failure
             _mongo.connect(host);
+
+            // do we have anyone watching the connect callback
+            if (_connectCallback) _master.execute([this]() { _connectCallback(nullptr); });
         }
         catch (const mongo::DBException& exception)
         {
-            // no callback to report the error
-        }
-    });
-}
-
-/**
- *  Establish a connection to a mongo daemon or mongos instance.
- *
- *  The hostname may be postfixed with a colon, followed by the port number
- *  to connect to. If no port number is given, the default port of 27017 is
- *  assumed instead.
- *
- *  @param  loop        the event loop to bind to
- *  @param  host        single server to connect to
- *  @param  callback    callback that will be executed when the connection is established or an error occured
- */
-Connection::Connection(React::Loop *loop, const std::string& host, const std::function<void(Connection *connection, const char *error)>& callback) :
-    _loop(loop),
-    _worker(loop),
-    _master()
-{
-    // connect to mongo
-    _worker.execute([this, host, callback]() {
-        // try to establish a connection to mongo
-        try
-        {
-            // connect throws an exception on failure
-            _mongo.connect(host);
-
-            // so if we get here we are connected
-            _master.execute([this, callback]() {
-                callback(this, NULL);
-            });
-        }
-        catch (const mongo::DBException& exception)
-        {
-            // something went awry, notify the listener
-            _master.execute([this, callback, exception]() {
-                callback(this, exception.toString().c_str());
-            });
+            // do we have anyone watching the connect callback
+            if (_connectCallback) _master.execute([this, exception]() { _connectCallback(exception.toString().c_str()); });
         }
     });
 }
@@ -221,22 +186,14 @@ Variant::Value Connection::convert(const mongo::BSONObj& value)
 }
 
 /**
- *  Get whether we are connected to mongo?
+ *  Get a call when the connection succeeds or fails
  *
  *  @param  callback    the callback that will be informed of the connection status
  */
-void Connection::connected(const std::function<void(bool connected)>& callback)
+void Connection::onConnected(const std::function<void(const char *error)>& callback)
 {
-    // check in worker
-    _worker.execute([this, callback]() {
-        // retrieve the result
-        auto result = !_mongo.isFailed();
-
-        // execute the callback in master thread
-        _master.execute([result, callback]() {
-            callback(result);
-        });
-    });
+    // register the callback
+    _connectCallback = callback;
 }
 
 /**

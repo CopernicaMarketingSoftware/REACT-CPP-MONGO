@@ -53,6 +53,11 @@ private:
      *  @param  value   the value to convert
      */
     Variant::Value convert(const mongo::BSONObj& value);
+
+    /**
+     *  Callback to execute once the connection is established
+     */
+    std::function<void(const char *error)> _connectCallback;
 public:
     /**
      *  Establish a connection to a mongo daemon or mongos instance.
@@ -67,24 +72,11 @@ public:
     Connection(React::Loop *loop, const std::string& host);
 
     /**
-     *  Establish a connection to a mongo daemon or mongos instance.
-     *
-     *  The hostname may be postfixed with a colon, followed by the port number
-     *  to connect to. If no port number is given, the default port of 27017 is
-     *  assumed instead.
-     *
-     *  @param  loop        the event loop to bind to
-     *  @param  host        single server to connect to
-     *  @param  callback    callback that will be executed when the connection is established or an error occured
-     */
-    Connection(React::Loop *loop, const std::string& host, const std::function<void(Connection *connection, const char *error)>& callback);
-
-    /**
-     *  Get whether we are connected to mongo?
+     *  Get a call when the connection succeeds or fails
      *
      *  @param  callback    the callback that will be informed of the connection status
      */
-    void connected(const std::function<void(bool connected)>& callback);
+    void onConnected(const std::function<void(const char *error)>& callback);
 
     /**
      *  Query a collection
