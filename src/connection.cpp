@@ -597,10 +597,10 @@ DeferredCommand& Connection::runCommand(const std::string& database, Variant::Va
             // the mongo library does not return one here, it wants
             // it to be passed in by reference so that it can modify
             // it for us. sort of like we're back in plain C.
-            mongo::BSONObj result;
+            auto result = std::make_shared<mongo::BSONObj>();
 
             // execute the command
-            _mongo.runCommand(database, convert(*request), result);
+            _mongo.runCommand(database, convert(*request), *result);
 
             // is anybody interested in the result
             if (!deferred->requireStatus())
@@ -610,8 +610,16 @@ DeferredCommand& Connection::runCommand(const std::string& database, Variant::Va
                 return;
             }
 
+            // is this a hidden error muffled away
+            if (!result->getField("ok").numberDouble())
+            {
+                // there should be an error string
+                _master.execute([deferred, result]() { deferred->failure(result->getField("error").str().c_str()); });
+                return;
+            }
+
             // convert the result to a Variant
-            auto output = std::make_shared<Variant::Value>(convert(result));
+            auto output = std::make_shared<Variant::Value>(convert(*result));
 
             // and execute the callback
             _master.execute([deferred, output]() { deferred->success(std::move(*output)); });
