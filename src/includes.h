@@ -19,4 +19,5 @@
 /**
  *  Include other files from this library
  */
+#include "../include/deferred.h"
 #include "../include/connection.h"

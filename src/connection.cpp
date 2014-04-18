@@ -244,22 +244,29 @@ void Connection::connected(const std::function<void(bool connected)>& callback)
  *
  *  @param  collection  database name and collection
  *  @param  query       the query to execute
- *  @param  callback    the callback that will be called with the results
+ *
+ *  The returned deferred object has an onSuccess method that
+ *  will give the result as an rvalue-reference. It can thus
+ *  be used something like this:
+ *
+ *  connection.query("collection", Variant::Value()).onSuccess([](Variant::Value&& result) {
+ *      // do something with result here
+ *  });
  */
-void Connection::query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
+DeferredQuery& Connection::query(const std::string& collection, Variant::Value&& query)
 {
     // move the query to a pointer to avoid needless copying
-    auto *request = new Variant::Value(std::move(query));
+    auto request = std::make_shared<Variant::Value>(std::move(query));
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredQuery>();
 
     // run the query in the worker
-    _worker.execute([this, collection, callback, request]() {
+    _worker.execute([this, collection, request, deferred]() {
         try
         {
             // execute query
             auto cursor = _mongo.query(collection, convert(*request));
-
-            // clean up the query object
-            delete request;
 
             /**
              *  Even though mongo can throw exceptions for the query
@@ -270,41 +277,28 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
             if (cursor.get() == NULL)
             {
                 // notify listener that a connection failure occured
-                _master.execute([callback]() {
-                    callback(Variant::Value{}, "Unspecified connection error");
-                });
-
-                // don't try to read from the cursor
+                _master.execute([deferred]() { deferred->failure("Unspecified connection error"); });
                 return;
             }
 
             // build the result value
-            auto *result = new std::vector<Variant::Value>;
+            auto result = std::make_shared<std::vector<Variant::Value>>();
 
             // process all results
             while (cursor->more()) result->push_back(convert(cursor->next()));
 
             // we now have all results, execute callback in master thread
-            _master.execute([result, callback]() {
-                // execute callback
-                callback(*result, NULL);
-
-                // clean up the result object
-                delete result;
-            });
+            _master.execute([result, deferred]() { deferred->success(std::move(*result)); });
         }
         catch (mongo::DBException& exception)
         {
-            // clean up the query object
-            delete request;
-
             // something went awry, notify listener
-            _master.execute([callback, exception]() {
-                // run callback with an empty result object and an error message
-                callback(Variant::Value{}, exception.toString().c_str());
-            });
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
+
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -316,12 +310,19 @@ void Connection::query(const std::string& collection, Variant::Value&& query, co
  *
  *  @param  collection  database name and collection
  *  @param  query       the query to execute
- *  @param  callback    the callback that will be called with the results
+ *
+ *  The returned deferred object has an onSuccess method that
+ *  will give the result as an rvalue-reference. It can thus
+ *  be used something like this:
+ *
+ *  connection.query("collection", Variant::Value()).onSuccess([](Variant::Value&& result) {
+ *      // do something with result here
+ *  });
  */
-void Connection::query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback)
+DeferredQuery& Connection::query(const std::string& collection, const Variant::Value& query)
 {
-    // move a copy to the implementation
-    this->query(collection, Variant::Value(query), callback);
+    // throw a copy to the implementation
+    return this->query(collection, Variant::Value(query));
 }
 
 /**
@@ -329,53 +330,46 @@ void Connection::query(const std::string& collection, const Variant::Value& quer
  *
  *  @param  collection  database name and collection
  *  @param  document    document to insert
- *  @param  callback    the callback that will be informed when insert is complete or failed
  */
-void Connection::insert(const std::string& collection, Variant::Value&& document, const std::function<void(const char *error)>& callback)
+DeferredInsert& Connection::insert(const std::string& collection, Variant::Value&& document)
 {
     // move the document to a pointer to avoid needless copying
-    auto *insert = new Variant::Value(std::move(document));
+    auto insert = std::make_shared<Variant::Value>(std::move(document));
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredInsert>();
 
     // run the insert in the worker
-    _worker.execute([this, collection, insert, callback]() {
+    _worker.execute([this, collection, insert, deferred]() {
         try
         {
             // execute the insert
             _mongo.insert(collection, convert(*insert));
 
-            // free up the document
-            delete insert;
+            // is anybody interested in the result?
+            if (!deferred->requireStatus())
+            {
+                // inform the listener we are done
+                _master.execute([deferred]() { deferred->complete(); });
+                return;
+            }
 
             // the error that could have occured
             auto error = _mongo.getLastError();
 
             // check whether an error occured
-            if (error.empty())
-            {
-                // inform the listener the insert is done
-                _master.execute([callback]() {
-                    callback(NULL);
-                });
-            }
-            else
-            {
-                // something freaky just happened, inform the listener
-                _master.execute([callback, error]() {
-                    callback(error.c_str());
-                });
-            }
+            if (error.empty()) _master.execute([deferred]() { deferred->success(); });
+            else _master.execute([deferred, error]() { deferred->failure(error.c_str()); });
         }
         catch (mongo::DBException& exception)
         {
-            // free up the document
-            delete insert;
-
             // inform the listener of the specific failure
-            _master.execute([callback, exception]() {
-                callback(exception.toString().c_str());
-            });
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
+
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -387,73 +381,11 @@ void Connection::insert(const std::string& collection, Variant::Value&& document
  *
  *  @param  collection  database name and collection
  *  @param  document    document to insert
- *  @param  callback    the callback that will be informed when insert is complete or failed
  */
-void Connection::insert(const std::string& collection, const Variant::Value& document, const std::function<void(const char *error)>& callback)
+DeferredInsert& Connection::insert(const std::string& collection, const Variant::Value& document)
 {
     // move a copy to the implementation
-    insert(collection, Variant::Value(document), callback);
-}
-
-/**
- *  Insert a document into a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  @param  collection  database name and collection
- *  @param  document    document to insert
- */
-void Connection::insert(const std::string& collection, Variant::Value&& document)
-{
-    // move the document to a pointer to avoid needless copying
-    auto *insert = new Variant::Value(std::move(document));
-
-    // run the insert in the worker
-    _worker.execute([this, collection, insert]() {
-        try
-        {
-            // execute the insert
-            _mongo.insert(collection, convert(*insert));
-
-            // free up the document
-            delete insert;
-        }
-        catch (mongo::DBException& exception)
-        {
-            // free up the document
-            delete insert;
-        }
-    });
-}
-
-/**
- *  Insert a document into a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  Note:   This function will make a copy of the document object. This
- *          can be useful when you want to reuse the given document object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
- *  @param  collection  database name and collection
- *  @param  document    document to insert
- */
-void Connection::insert(const std::string& collection, const Variant::Value& document)
-{
-    // move a copy to the implementation
-    insert(collection, Variant::Value(document));
+    return insert(collection, Variant::Value(document));
 }
 
 /**
@@ -461,13 +393,15 @@ void Connection::insert(const std::string& collection, const Variant::Value& doc
  *
  *  @param  collection  database name and collection
  *  @param  documents   documents to insert
- *  @param  callback    the callback that will be informed when insert is complete or failed
  */
-void Connection::insert(const std::string& collection, const std::vector<Variant::Value>& documents, const std::function<void(const char *error)>& callback)
+DeferredInsert& Connection::insert(const std::string& collection, const std::vector<Variant::Value>& documents)
 {
     // create a new vector with the mongo objects
     // we use a pointer to avoid needless copying
-    auto *insert = new std::vector<mongo::BSONObj>();
+    auto insert = std::make_shared<std::vector<mongo::BSONObj>>();
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredInsert>();
 
     // allocate memory for the objects
     insert->reserve(documents.size());
@@ -476,89 +410,36 @@ void Connection::insert(const std::string& collection, const std::vector<Variant
     for (auto &document : documents) insert->push_back(convert(document));
 
     // run the insert in the worker
-    _worker.execute([this, collection, insert, callback]() {
+    _worker.execute([this, collection, insert, deferred]() {
         try
         {
             // execute the insert
             _mongo.insert(collection, *insert);
 
-            // free up the document
-            delete insert;
+            // is anybody interested in the result?
+            if (!deferred->requireStatus())
+            {
+                // inform the listener we are done
+                _master.execute([deferred]() { deferred->complete(); });
+                return;
+            }
 
             // the error that could have occured
             auto error = _mongo.getLastError();
 
             // check whether an error occured
-            if (error.empty())
-            {
-                // inform the listener the insert is done
-                _master.execute([callback]() {
-                    callback(NULL);
-                });
-            }
-            else
-            {
-                // something freaky just happened, inform the listener
-                _master.execute([callback, error]() {
-                    callback(error.c_str());
-                });
-            }
+            if (error.empty()) _master.execute([deferred]() { deferred->success(); });
+            else _master.execute([deferred, error]() { deferred->failure(error.c_str()); });
         }
         catch (mongo::DBException& exception)
         {
-            // free up the document
-            delete insert;
-
             // inform the listener of the specific failure
-            _master.execute([callback, exception]() {
-                callback(exception.toString().c_str());
-            });
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
-}
 
-/**
- *  Insert a batch of documents into a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  @param  collection  database name and collection
- *  @param  documents   documents to insert
- */
-void Connection::insert(const std::string& collection, const std::vector<Variant::Value>& documents)
-{
-    // create a new vector with the mongo objects
-    // we use a pointer to avoid needless copying
-    auto *insert = new std::vector<mongo::BSONObj>();
-
-    // allocate memory for the objects
-    insert->reserve(documents.size());
-
-    // insert all documents
-    for (auto &document : documents) insert->push_back(convert(document));
-
-    // run the insert in the worker
-    _worker.execute([this, collection, insert]() {
-        try
-        {
-            // execute the insert
-            _mongo.insert(collection, *insert);
-
-            // free up the document
-            delete insert;
-        }
-        catch (mongo::DBException& exception)
-        {
-            // free up the document
-            delete insert;
-        }
-    });
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -566,59 +447,49 @@ void Connection::insert(const std::string& collection, const std::vector<Variant
  *
  *  @param  collection  collection keeping the document to be updated
  *  @param  document    the new document to replace existing document with
- *  @param  callback    the callback that will be informed when update is complete or failed
  *  @param  upsert      if no matching document was found, create one instead
  *  @param  multi       if multiple matching documents are found, update them all
  */
-
-void Connection::update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+DeferredUpdate& Connection::update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert, bool multi)
 {
     // move the query and document to a pointer to avoid needless copying
-    auto request = new Variant::Value(std::move(query));
-    auto *update = new Variant::Value(std::move(document));
+    auto request = std::make_shared<Variant::Value>(std::move(query));
+    auto update  = std::make_shared<Variant::Value>(std::move(document));
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredUpdate>();
 
     // run the update in the worker
-    _worker.execute([this, collection, request, update, callback, upsert, multi]() {
+    _worker.execute([this, collection, request, update, deferred, upsert, multi]() {
         try
         {
             // execute the update
             _mongo.update(collection, convert(*request), convert(*update), upsert, multi);
 
-            // clean up
-            delete request;
-            delete update;
+            // is anybody interested in the result?
+            if (!deferred->requireStatus())
+            {
+                // inform the listener we are done
+                _master.execute([deferred]() { deferred->complete(); });
+                return;
+            }
 
             // the error that could have occured
             auto error = _mongo.getLastError();
 
             // check whether an error occured
-            if (error.empty())
-            {
-                // inform the listener the insert is done
-                _master.execute([callback]() {
-                    callback(NULL);
-                });
-            }
-            else
-            {
-                // something freaky just happened, inform the listener
-                _master.execute([callback, error]() {
-                    callback(error.c_str());
-                });
-            }
+            if (error.empty()) _master.execute([deferred]() { deferred->success(); });
+            else _master.execute([deferred, error]() { deferred->failure(error.c_str()); });
         }
         catch (const mongo::DBException& exception)
         {
-            // clean up
-            delete request;
-            delete update;
-
             // inform the listener of the failure
-            _master.execute([callback, exception]() {
-                callback(exception.toString().c_str());
-            });
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
+
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -631,15 +502,13 @@ void Connection::update(const std::string& collection, Variant::Value&& query, V
  *  @param  collection  collection keeping the document to be updated
  *  @param  query       the query to find the document(s) to update
  *  @param  document    the new document to replace existing document with
- *  @param  callback    the callback that will be informed when update is complete or failed
  *  @param  upsert      if no matching document was found, create one instead
  *  @param  multi       if multiple matching documents are found, update them all
  */
-
-void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+DeferredUpdate& Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, Variant::Value(query), std::move(document), callback, upsert, multi);
+    return update(collection, Variant::Value(query), std::move(document), upsert, multi);
 }
 
 /**
@@ -652,15 +521,13 @@ void Connection::update(const std::string& collection, const Variant::Value& que
  *  @param  collection  collection keeping the document to be updated
  *  @param  query       the query to find the document(s) to update
  *  @param  document    the new document to replace existing document with
- *  @param  callback    the callback that will be informed when update is complete or failed
  *  @param  upsert      if no matching document was found, create one instead
  *  @param  multi       if multiple matching documents are found, update them all
  */
-
-void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+DeferredUpdate& Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, std::move(query), Variant::Value(document), callback, upsert, multi);
+    return update(collection, std::move(query), Variant::Value(document), upsert, multi);
 }
 
 /**
@@ -673,143 +540,13 @@ void Connection::update(const std::string& collection, Variant::Value&& query, c
  *  @param  collection  collection keeping the document to be updated
  *  @param  query       the query to find the document(s) to update
  *  @param  document    the new document to replace existing document with
- *  @param  callback    the callback that will be informed when update is complete or failed
  *  @param  upsert      if no matching document was found, create one instead
  *  @param  multi       if multiple matching documents are found, update them all
  */
-
-void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert, bool multi)
+DeferredUpdate& Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert, bool multi)
 {
     // move copies to the implementation
-    update(collection, Variant::Value(query), Variant::Value(document), callback, upsert, multi);
-}
-
-/**
- *  Update an existing document in a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  @param  collection  collection keeping the document to be updated
- *  @param  query       the query to find the document(s) to update
- *  @param  document    the new document to replace existing document with
- *  @param  upsert      if no matching document was found, create one instead
- *  @param  multi       if multiple matching documents are found, update them all
- */
-
-void Connection::update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert, bool multi)
-{
-    // move the query and document to a pointer to avoid needless copying
-    auto request = new Variant::Value(std::move(query));
-    auto *update = new Variant::Value(std::move(document));
-
-    // run the update in the worker
-    _worker.execute([this, collection, request, update, upsert, multi]() {
-        try
-        {
-            // execute the update
-            _mongo.update(collection, convert(*request), convert(*update), upsert, multi);
-
-            // clean up
-            delete request;
-            delete update;
-        }
-        catch (const mongo::DBException& exception)
-        {
-            // clean up
-            delete request;
-            delete update;
-        }
-    });
-}
-
-/**
- *  Update an existing document in a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  Note:   This function will make a copy of the query object.
- *          This can be useful when you want to reuse the given document object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
- *  @param  collection  collection keeping the document to be updated
- *  @param  query       the query to find the document(s) to update
- *  @param  document    the new document to replace existing document with
- *  @param  upsert      if no matching document was found, create one instead
- *  @param  multi       if multiple matching documents are found, update them all
- */
-
-void Connection::update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert, bool multi)
-{
-    // move copies to the implementation
-    update(collection, Variant::Value(query), std::move(document), upsert, multi);
-}
-
-/**
- *  Update an existing document in a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  Note:   This function will make a copy of the document object.
- *          This can be useful when you want to reuse the given document object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
- *  @param  collection  collection keeping the document to be updated
- *  @param  query       the query to find the document(s) to update
- *  @param  document    the new document to replace existing document with
- *  @param  upsert      if no matching document was found, create one instead
- *  @param  multi       if multiple matching documents are found, update them all
- */
-
-void Connection::update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert, bool multi)
-{
-    // move copies to the implementation
-    update(collection, std::move(query), Variant::Value(document), upsert, multi);
-}
-
-/**
- *  Update an existing document in a collection
- *
- *  This function does not report on whether the insert was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  Note:   This function will make a copy of the query and document object.
- *          This can be useful when you want to reuse the given document object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
- *  @param  collection  collection keeping the document to be updated
- *  @param  query       the query to find the document(s) to update
- *  @param  document    the new document to replace existing document with
- *  @param  upsert      if no matching document was found, create one instead
- *  @param  multi       if multiple matching documents are found, update them all
- */
-
-void Connection::update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert, bool multi)
-{
-    // move copies to the implementation
-    update(collection, Variant::Value(query), Variant::Value(document), upsert, multi);
+    return update(collection, Variant::Value(query), Variant::Value(document), upsert, multi);
 }
 
 /**
@@ -817,54 +554,47 @@ void Connection::update(const std::string& collection, const Variant::Value& que
  *
  *  @param  collection  collection holding the document(s) to be removed
  *  @param  query       the query to find the document(s) to remove
- *  @param  callback    the callback that will be informed once the delete is complete or failed
  *  @param  limitToOne  limit the removal to a single document
  */
-void Connection::remove(const std::string& collection, Variant::Value&& query, const std::function<void(const char *error)>& callback, bool limitToOne)
+DeferredRemove& Connection::remove(const std::string& collection, Variant::Value&& query, bool limitToOne)
 {
     // move the query to a pointer to avoid needless copying
-    auto *request = new Variant::Value(std::move(query));
+    auto request = std::make_shared<Variant::Value>(std::move(query));
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredRemove>();
 
     // run the remove in the worker
-    _worker.execute([this, collection, request, callback, limitToOne]() {
+    _worker.execute([this, collection, request, deferred, limitToOne]() {
         try
         {
             // execute remove query
             _mongo.remove(collection, convert(*request), limitToOne);
 
-            // free the request
-            delete request;
+            // is anybody interested in the result?
+            if (!deferred->requireStatus())
+            {
+                // inform the listener we are done
+                _master.execute([deferred]() { deferred->complete(); });
+                return;
+            }
 
             // the error that could have occured
             auto error = _mongo.getLastError();
 
             // check whether an error occured
-            if (error.empty())
-            {
-                // inform the listener the insert is done
-                _master.execute([callback]() {
-                    callback(NULL);
-                });
-            }
-            else
-            {
-                // something freaky just happened, inform the listener
-                _master.execute([callback, error]() {
-                    callback(error.c_str());
-                });
-            }
+            if (error.empty()) _master.execute([deferred]() { deferred->success(); });
+            else _master.execute([deferred, error]() { deferred->failure(error.c_str()); });
         }
         catch (const mongo::DBException& exception)
         {
-            // free the request
-            delete request;
-
             // inform the listener of the failure
-            _master.execute([callback, exception]() {
-                callback(exception.toString().c_str());
-            });
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
+
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -876,76 +606,12 @@ void Connection::remove(const std::string& collection, Variant::Value&& query, c
  *
  *  @param  collection  collection holding the document(s) to be removed
  *  @param  query       the query to find the document(s) to remove
- *  @param  callback    the callback that will be informed once the delete is complete or failed
  *  @param  limitToOne  limit the removal to a single document
  */
-void Connection::remove(const std::string& collection, const Variant::Value& query, const std::function<void(const char *error)>& callback, bool limitToOne)
+DeferredRemove& Connection::remove(const std::string& collection, const Variant::Value& query, bool limitToOne)
 {
     // move copy to the implementation
-    remove(collection, Variant::Value(query), callback, limitToOne);
-}
-
-/**
- *  Remove one or more existing documents from a collection
- *
- *  This function does not report on whether the remove was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  @param  collection  collection holding the document(s) to be removed
- *  @param  query       the query to find the document(s) to remove
- *  @param  limitToOne  limit the removal to a single document
- */
-void Connection::remove(const std::string& collection, Variant::Value&& query, bool limitToOne)
-{
-    // move the query to a pointer to avoid needless copying
-    auto *request = new Variant::Value(std::move(query));
-
-    // run the remove in the worker
-    _worker.execute([this, collection, request, limitToOne]() {
-        try
-        {
-            // execute remove query
-            _mongo.remove(collection, convert(*request), limitToOne);
-
-            // free the request
-            delete request;
-        }
-        catch (const mongo::DBException& exception)
-        {
-            // free the request
-            delete request;
-        }
-    });
-}
-
-/**
- *  Remove one or more existing documents from a collection
- *
- *  This function does not report on whether the remove was successful
- *  or not. It avoids a little bit of overhead from context switches
- *  and a roundtrip to mongo to retrieve the last eror, and is
- *  therefore a little faster.
- *
- *  It is best used for non-critical data, like cached data that can
- *  easily be reconstructed if the data somehow does not reach mongo.
- *
- *  Note:   This function will make a copy of the query object.
- *          This can be useful when you want to reuse the given query object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
- *  @param  collection  collection holding the document(s) to be removed
- *  @param  query       the query to find the document(s) to remove
- *  @param  limitToOne  limit the removal to a single document
- */
-void Connection::remove(const std::string& collection, const Variant::Value& query, bool limitToOne)
-{
-    // move copy to the implementation
-    remove(collection, Variant::Value(query), limitToOne);
+    return remove(collection, Variant::Value(query), limitToOne);
 }
 
 /**
@@ -955,21 +621,19 @@ void Connection::remove(const std::string& collection, const Variant::Value& que
  *  not (yet) part of the driver. This allows you to run new commands
  *  available in the mongodb daemon.
  *
- *  Note:   This function will make a copy of the query and document object.
- *          This can be useful when you want to reuse the given document object,
- *          otherwise it is best to pass in an rvalue and avoid the copy.
- *
  *  @param  database    the database to run the command on (not including the collection name)
  *  @param  command     the command to execute
- *  @param  callback    callback to receive the result
  */
-void Connection::runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback)
+DeferredCommand& Connection::runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback)
 {
     // move the query to a pointer to avoid needless copying
-    auto *request = new Variant::Value(std::move(query));
+    auto request = std::make_shared<Variant::Value>(std::move(query));
+
+    // create the deferred handler
+    auto deferred = std::make_shared<DeferredCommand>();
 
     // run the command in the worker
-    _worker.execute([this, database, request, callback]() {
+    _worker.execute([this, database, request, deferred]() {
         try
         {
             // create a new mongo object, because for some reason
@@ -981,58 +645,29 @@ void Connection::runCommand(const std::string& database, const Variant::Value& q
             // execute the command
             _mongo.runCommand(database, convert(*request), result);
 
-            // clean up the request
-            delete request;
+            // is anybody interested in the result
+            if (!deferred->requireStatus())
+            {
+                // inform the listener we are done
+                _master.execute([deferred]() { deferred->complete(); });
+                return;
+            }
 
             // convert the result to a Variant
-            auto *output = new Variant::Value(convert(result));
+            auto output = std::make_shared<Variant::Value>(convert(result));
 
             // and execute the callback
-            _master.execute([callback, output]() {
-                callback(std::move(*output));
-                delete output;
-            });
+            _master.execute([deferred, output]() { deferred->success(std::move(*output)); });
         }
         catch (const mongo::DBException& exception)
         {
-            // clean up the request
-            delete request;
-
-            // run the callback from the master context
-            _master.execute([callback, exception]() {
-                // sigh, mongo decided to throw an exception here
-                // instead of setting ok to false and adding an
-                // error in the object like it does for most errors
-                // occuring during runCommand, we simulate mongos
-                // normal behavior by creating the object ourselves
-                Variant::Value result;
-
-                // set the relevant values
-                result["ok"] = false;
-                result["error"] = exception.toString().c_str();
-
-                // pass the simulated error to the callback
-                callback(std::move(result));
-            });
+            // inform the listener of the failure
+            _master.execute([deferred, exception]() { deferred->failure(exception.toString().c_str()); });
         }
     });
-}
 
-/**
- *  Run a command on the connection.
- *
- *  This is the general way to run commands on the database that are
- *  not (yet) part of the driver. This allows you to run new commands
- *  available in the mongodb daemon.
- *
- *  @param  database    the database to run the command on (not including the collection name)
- *  @param  command     the command to execute
- *  @param  callback    callback to receive the result
- */
-void Connection::runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback)
-{
-    // move copy to the implementation
-    runCommand(database, Variant::Value(query), callback);
+    // return the deferred handler
+    return *deferred;
 }
 
 /**
@@ -1049,52 +684,10 @@ void Connection::runCommand(const std::string& database, Variant::Value&& query,
  *  @param  database    the database to run the command on (not including the collection name)
  *  @param  command     the command to execute
  */
-void Connection::runCommand(const std::string& database, const Variant::Value& query)
-{
-    // move the query to a pointer to avoid needless copying
-    auto *request = new Variant::Value(std::move(query));
-
-    // run the command in the worker
-    _worker.execute([this, database, request]() {
-        try
-        {
-            // create a new mongo object, because for some reason
-            // the mongo library does not return one here, it wants
-            // it to be passed in by reference so that it can modify
-            // it for us. sort of like we're back in plain C.
-            //
-            // best part is we don't need it, but mongo absolutely
-            // needs this object and will fill it for us.
-            mongo::BSONObj result;
-
-            // execute the command
-            _mongo.runCommand(database, convert(*request), result);
-
-            // clean up the request
-            delete request;
-        }
-        catch (const mongo::DBException& exception)
-        {
-            // clean up the request
-            delete request;
-        }
-    });
-}
-
-/**
- *  Run a command on the connection.
- *
- *  This is the general way to run commands on the database that are
- *  not (yet) part of the driver. This allows you to run new commands
- *  available in the mongodb daemon.
- *
- *  @param  database    the database to run the command on (not including the collection name)
- *  @param  command     the command to execute
- */
-void Connection::runCommand(const std::string& database, Variant::Value&& query)
+DeferredCommand& Connection::runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback)
 {
     // move copy to the implementation
-    runCommand(database, Variant::Value(query));
+    return runCommand(database, Variant::Value(query), callback);
 }
 
 /**

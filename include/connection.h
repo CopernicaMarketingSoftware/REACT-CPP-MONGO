@@ -91,9 +91,16 @@ public:
      *
      *  @param  collection  database name and collection
      *  @param  query       the query to execute
-     *  @param  callback    the callback that will be called with the results
+     *
+     *  The returned deferred object has an onSuccess method that
+     *  will give the result as an rvalue-reference. It can thus
+     *  be used something like this:
+     *
+     *  connection.query("collection", Variant::Value()).onSuccess([](Variant::Value&& result) {
+     *      // do something with result here
+     *  });
      */
-    void query(const std::string& collection, Variant::Value&& query, const std::function<void(Variant::Value&& result, const char *error)>& callback);
+    DeferredQuery& query(const std::string& collection, Variant::Value&& query);
 
     /**
      *  Query a collection
@@ -104,18 +111,24 @@ public:
      *
      *  @param  collection  database name and collection
      *  @param  query       the query to execute
-     *  @param  callback    the callback that will be called with the results
+     *
+     *  The returned deferred object has an onSuccess method that
+     *  will give the result as an rvalue-reference. It can thus
+     *  be used something like this:
+     *
+     *  connection.query("collection", Variant::Value()).onSuccess([](Variant::Value&& result) {
+     *      // do something with result here
+     *  });
      */
-    void query(const std::string& collection, const Variant::Value& query, const std::function<void(Variant::Value&& result, const char *error)>& callback);
+    DeferredQuery& query(const std::string& collection, const Variant::Value& query);
 
     /**
      *  Insert a document into a collection
      *
      *  @param  collection  database name and collection
      *  @param  document    document to insert
-     *  @param  callback    the callback that will be informed when insert is complete or failed
      */
-    void insert(const std::string& collection, Variant::Value&& document, const std::function<void(const char *error)>& callback);
+    DeferredInsert& insert(const std::string& collection, Variant::Value&& document);
 
     /**
      *  Insert a document into a collection
@@ -126,70 +139,16 @@ public:
      *
      *  @param  collection  database name and collection
      *  @param  document    document to insert
-     *  @param  callback    the callback that will be informed when insert is complete or failed
      */
-    void insert(const std::string& collection, const Variant::Value& document, const std::function<void(const char *error)>& callback);
-
-    /**
-     *  Insert a document into a collection
-     *
-     *  This function does not report on whether the insert was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  @param  collection  database name and collection
-     *  @param  document    document to insert
-     */
-    void insert(const std::string& collection, Variant::Value&& document);
-
-    /**
-     *  Insert a document into a collection
-     *
-     *  This function does not report on whether the insert was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  Note:   This function will make a copy of the document object. This
-     *          can be useful when you want to reuse the given document object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  collection  database name and collection
-     *  @param  document    document to insert
-     */
-    void insert(const std::string& collection, const Variant::Value& document);
+    DeferredInsert& insert(const std::string& collection, const Variant::Value& document);
 
     /**
      *  Insert a batch of documents into a collection
      *
      *  @param  collection  database name and collection
      *  @param  documents   documents to insert
-     *  @param  callback    the callback that will be informed when insert is complete or failed
      */
-    void insert(const std::string& collection, const std::vector<Variant::Value>& documents, const std::function<void(const char *error)>& callback);
-
-    /**
-     *  Insert a batch of documents into a collection
-     *
-     *  This function does not report on whether the insert was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  @param  collection  database name and collection
-     *  @param  documents   documents to insert
-     */
-    void insert(const std::string& collection, const std::vector<Variant::Value>& documents);
+    DeferredInsert& insert(const std::string& collection, const std::vector<Variant::Value>& documents);
 
     /**
      *  Update an existing document in a collection
@@ -197,11 +156,10 @@ public:
      *  @param  collection  collection keeping the document to be updated
      *  @param  query       the query to find the document(s) to update
      *  @param  document    the new document to replace existing document with
-     *  @param  callback    the callback that will be informed when update is complete or failed
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-    void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+    DeferredUpdate& update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
@@ -213,11 +171,10 @@ public:
      *  @param  collection  collection keeping the document to be updated
      *  @param  query       the query to find the document(s) to update
      *  @param  document    the new document to replace existing document with
-     *  @param  callback    the callback that will be informed when update is complete or failed
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-    void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+    DeferredUpdate& update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
@@ -229,11 +186,10 @@ public:
      *  @param  collection  collection keeping the document to be updated
      *  @param  query       the query to find the document(s) to update
      *  @param  document    the new document to replace existing document with
-     *  @param  callback    the callback that will be informed when update is complete or failed
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-    void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
+    DeferredUpdate& update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert = false, bool multi = false);
 
     /**
      *  Update an existing document in a collection
@@ -245,109 +201,19 @@ public:
      *  @param  collection  collection keeping the document to be updated
      *  @param  query       the query to find the document(s) to update
      *  @param  document    the new document to replace existing document with
-     *  @param  callback    the callback that will be informed when update is complete or failed
      *  @param  upsert      if no matching document was found, create one instead
      *  @param  multi       if multiple matching documents are found, update them all
      */
-    void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, const std::function<void(const char *error)>& callback, bool upsert = false, bool multi = false);
-
-    /**
-     *  Update an existing document in a collection
-     *
-     *  This function does not report on whether the update was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  @param  collection  collection keeping the document to be updated
-     *  @param  query       the query to find the document(s) to update
-     *  @param  document    the new document to replace existing document with
-     *  @param  upsert      if no matching document was found, create one instead
-     *  @param  multi       if multiple matching documents are found, update them all
-     */
-    void update(const std::string& collection, Variant::Value&& query, Variant::Value&& document, bool upsert = false, bool multi = false);
-
-    /**
-     *  Update an existing document in a collection
-     *
-     *  This function does not report on whether the update was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  Note:   This function will make a copy of the query object.
-     *          This can be useful when you want to reuse the given document object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  collection  collection keeping the document to be updated
-     *  @param  query       the query to find the document(s) to update
-     *  @param  document    the new document to replace existing document with
-     *  @param  upsert      if no matching document was found, create one instead
-     *  @param  multi       if multiple matching documents are found, update them all
-     */
-    void update(const std::string& collection, const Variant::Value& query, Variant::Value&& document, bool upsert = false, bool multi = false);
-
-    /**
-     *  Update an existing document in a collection
-     *
-     *  This function does not report on whether the update was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  Note:   This function will make a copy of the document object.
-     *          This can be useful when you want to reuse the given document object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  collection  collection keeping the document to be updated
-     *  @param  query       the query to find the document(s) to update
-     *  @param  document    the new document to replace existing document with
-     *  @param  upsert      if no matching document was found, create one instead
-     *  @param  multi       if multiple matching documents are found, update them all
-     */
-    void update(const std::string& collection, Variant::Value&& query, const Variant::Value& document, bool upsert = false, bool multi = false);
-
-    /**
-     *  Update an existing document in a collection
-     *
-     *  This function does not report on whether the update was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  Note:   This function will make a copy of the query and document object.
-     *          This can be useful when you want to reuse the given document object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  collection  collection keeping the document to be updated
-     *  @param  query       the query to find the document(s) to update
-     *  @param  document    the new document to replace existing document with
-     *  @param  upsert      if no matching document was found, create one instead
-     *  @param  multi       if multiple matching documents are found, update them all
-     */
-    void update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert = false, bool multi = false);
+    DeferredUpdate& update(const std::string& collection, const Variant::Value& query, const Variant::Value& document, bool upsert = false, bool multi = false);
 
     /**
      *  Remove one or more existing documents from a collection
      *
      *  @param  collection  collection holding the document(s) to be removed
      *  @param  query       the query to find the document(s) to remove
-     *  @param  callback    the callback that will be informed once the delete is complete or failed
      *  @param  limitToOne  limit the removal to a single document
      */
-    void remove(const std::string& collection, Variant::Value&& query, const std::function<void(const char *error)>& callback, bool limitToOne = false);
+    DeferredRemove& remove(const std::string& collection, Variant::Value&& query, bool limitToOne = false);
 
     /**
      *  Remove one or more existing documents from a collection
@@ -358,78 +224,9 @@ public:
      *
      *  @param  collection  collection holding the document(s) to be removed
      *  @param  query       the query to find the document(s) to remove
-     *  @param  callback    the callback that will be informed once the delete is complete or failed
      *  @param  limitToOne  limit the removal to a single document
      */
-    void remove(const std::string& collection, const Variant::Value& query, const std::function<void(const char *error)>& callback, bool limitToOne = false);
-
-    /**
-     *  Remove one or more existing documents from a collection
-     *
-     *  This function does not report on whether the remove was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  @param  collection  collection holding the document(s) to be removed
-     *  @param  query       the query to find the document(s) to remove
-     *  @param  limitToOne  limit the removal to a single document
-     */
-    void remove(const std::string& collection, Variant::Value&& query, bool limitToOne = false);
-
-    /**
-     *  Remove one or more existing documents from a collection
-     *
-     *  This function does not report on whether the remove was successful
-     *  or not. It avoids a little bit of overhead from context switches
-     *  and a roundtrip to mongo to retrieve the last eror, and is
-     *  therefore a little faster.
-     *
-     *  It is best used for non-critical data, like cached data that can
-     *  easily be reconstructed if the data somehow does not reach mongo.
-     *
-     *  Note:   This function will make a copy of the query object.
-     *          This can be useful when you want to reuse the given query object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  collection  collection holding the document(s) to be removed
-     *  @param  query       the query to find the document(s) to remove
-     *  @param  limitToOne  limit the removal to a single document
-     */
-    void remove(const std::string& collection, const Variant::Value& query, bool limitToOne = false);
-
-    /**
-     *  Run a command on the connection.
-     *
-     *  This is the general way to run commands on the database that are
-     *  not (yet) part of the driver. This allows you to run new commands
-     *  available in the mongodb daemon.
-     *
-     *  Note:   This function will make a copy of the query and document object.
-     *          This can be useful when you want to reuse the given document object,
-     *          otherwise it is best to pass in an rvalue and avoid the copy.
-     *
-     *  @param  database    the database to run the command on (not including the collection name)
-     *  @param  command     the command to execute
-     *  @param  callback    callback to receive the result
-     */
-    void runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback);
-
-    /**
-     *  Run a command on the connection.
-     *
-     *  This is the general way to run commands on the database that are
-     *  not (yet) part of the driver. This allows you to run new commands
-     *  available in the mongodb daemon.
-     *
-     *  @param  database    the database to run the command on (not including the collection name)
-     *  @param  command     the command to execute
-     *  @param  callback    callback to receive the result
-     */
-    void runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback);
+    DeferredRemove& remove(const std::string& collection, const Variant::Value& query, bool limitToOne = false);
 
     /**
      *  Run a command on the connection.
@@ -445,7 +242,7 @@ public:
      *  @param  database    the database to run the command on (not including the collection name)
      *  @param  command     the command to execute
      */
-    void runCommand(const std::string& database, const Variant::Value& query);
+    DeferredCommand& runCommand(const std::string& database, const Variant::Value& query, const std::function<void(Variant::Value&& result)>& callback);
 
     /**
      *  Run a command on the connection.
@@ -457,7 +254,7 @@ public:
      *  @param  database    the database to run the command on (not including the collection name)
      *  @param  command     the command to execute
      */
-    void runCommand(const std::string& database, Variant::Value&& query);
+    DeferredCommand& runCommand(const std::string& database, Variant::Value&& query, const std::function<void(Variant::Value&& result)>& callback);
 };
 
 /**

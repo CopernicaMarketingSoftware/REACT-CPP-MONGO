@@ -21,6 +21,7 @@
 /**
  *  Other include files
  */
+#include <reactcpp/mongo/deferred.h>
 #include <reactcpp/mongo/connection.h>
 
 /**
