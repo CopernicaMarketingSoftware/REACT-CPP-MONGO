@@ -28,14 +28,7 @@ Variant::Value query;
 query["_id"] = "documentid";
 
 // retrieve the document
-mongo.query("database.collection", std::move(query), [](Variant::Value&& result, const char *error) {
-    // check for an error
-    if (error)
-    {
-        std::cout << "Something went wrong querying: " << error << std::endl;
-        return;
-    }
-
+mongo.query("database.collection", std::move(query)).onSuccess([](Variant::Value&& result) {
     // since we search for an exact id, we will get a maximum of one result
     // however, this result will always be an array
     if (result.size() == 0)
@@ -46,6 +39,8 @@ mongo.query("database.collection", std::move(query), [](Variant::Value&& result,
 
     // assume that the document has a string field named 'firstname'
     std::string firstname = result[0]["firstname"];
+}).onError([](const char *error) {
+    std::cout << "Something went wrong querying: " << error << std::endl;
 });
 ```
 
@@ -58,34 +53,11 @@ document["email"] = "info@example.org";
 document["address"]["city"] = "Gotham City";
 document["address"]["phone"] = "555-BATMAN";
 
-mongo.insert("database.collection", std::move(document), [](const char *error) {
-    // check for an error
-    if (!error) std::cout << "Document inserted" << std::endl;
-
-    // otherwise, we will get a description of what exactly went wrong
+mongo.insert("database.collection", std::move(document)).onSuccess([]() {
+    std::cout << "Document inserted" << std::endl;
+}).onError([](const char *error) {
     std::cout << "Could not insert document: " << error << std::endl;
 });
-```
-
-All functions, with the exception of the query function, can also be called
-without a callback. This way, the library will do its very best to make sure
-the action is carried out, but there is no feedback, and failure is silent.
-
-This can be useful when e.g. storing cached data, that could easily be created
-again in case the insert failed. They are significantly faster because checking
-for an error takes an extra roundtrip to the mongodb server.
-
-When we are not interested in the result of an insert operation, we could have
-written the previous example like this:
-
-```c
-Variant::Value document;
-document["name"] = "Example User";
-document["email"] = "info@example.org";
-document["address"]["city"] = "Gotham City";
-document["address"]["phone"] = "555-BATMAN";
-
-mongo.insert("database.collection", std::move(document));
 ```
 
 MOVING DATA
