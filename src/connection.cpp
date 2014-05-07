@@ -26,8 +26,8 @@ namespace React { namespace Mongo {
  */
 Connection::Connection(React::Loop *loop, const std::string& host) :
     _loop(loop),
-    _worker(loop),
-    _master()
+    _worker(),
+    _master(loop)
 {
     // connect to mongo
     _worker.execute([this, host]() {
