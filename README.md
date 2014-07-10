@@ -6,6 +6,9 @@ C++ asynchronous mongo library on top of the REACT-CPP library. Uses lambdas and
 This library works mostly the same as the regular mongo c++ library, except all functions accept a lambda argument
 that will be called when results (or failure) are available.
 
+This library is dependent on the mongo C++ driver library (available from their website) as well as the VARIANT-CPP
+library available at https://github.com/CopernicaMarketingSoftware/VARIANT-CPP
+
 ```c
 React::Mongo::Connection mongo("mongodb.example.org", [](React::Mongo::Connection *connection, const char *error) {
     // if no error occured, we will receive a null pointer
